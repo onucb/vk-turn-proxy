@@ -149,13 +149,13 @@ func getVkCreds(ctx context.Context, link string) (string, string, string, error
 
 	// Check for captcha error
 	if errMsg, ok := resp["error"].(map[string]interface{}); ok {
-		captchaData, isCaptcha := ExtractCaptchaData(errMsg)
-		if !isCaptcha {
+		captchaErr := ParseVkCaptchaError(errMsg)
+		if captchaErr == nil || !captchaErr.IsCaptchaError() {
 			return "", "", "", fmt.Errorf("Token 2 VK error: %v", errMsg)
 		}
 
 		log.Printf("[VK Auth] Captcha detected, solving...")
-		successToken, solveErr := SolveVkCaptcha(ctx, captchaData)
+		successToken, solveErr := SolveVkCaptcha(ctx, captchaErr)
 		if solveErr != nil {
 			return "", "", "", fmt.Errorf("captcha solving failed: %w", solveErr)
 		}
@@ -171,10 +171,10 @@ func getVkCreds(ctx context.Context, link string) (string, string, string, error
 				"&success_token=%s&captcha_ts=%s&captcha_attempt=%s"+
 				"&access_token=%s",
 			url.QueryEscape(link),
-			captchaData.CaptchaSid,
+			captchaErr.CaptchaSid,
 			successToken,
-			captchaData.CaptchaTs,
-			captchaData.CaptchaAttempt,
+			captchaErr.CaptchaTs,
+			captchaErr.CaptchaAttempt,
 			token1,
 		)
 		resp, err = vkHTTPPost(ctx, t2Data, t2URL)
